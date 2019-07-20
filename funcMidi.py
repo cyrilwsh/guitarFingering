@@ -134,23 +134,49 @@ def MidiCategorize(MidiFileName):
 import copy
 import itertools
 
+# input note, output domain
+def funcNote2Domain(note, dicNoteOnFingerBoard):
+    fingerings = dicNoteOnFingerBoard[note]
+    domain = []
+    for fingering in fingerings:
+        # fingering = [5,2]
+        if fingering[1] == 0: # if fret=0, no need swap all fingers
+            domain.append(fingering + [0])
+        else: # if fret !=0, swap all fingers 1~4
+            for finger1234 in range (1,5):
+    #                 print(finger1234)
+                domain.append(fingering + [finger1234])
+    return domain
+
+# input choNote, output domains
+# funcNoteDomains
 def funcNoteDomains(choNote, dicNoteOnFingerBoard):
     domains = []
-    x = 0 # variable
-    for x in range(len(choNote)):
-        # x = 41
-        domains.append([])
-        fingerings = dicNoteOnFingerBoard[choNote[x]]
-        # fingerings = [[5, 2], [6, 7]]
-        for fingering in fingerings:
-            # fingering = [5,2]
-            if fingering[1] == 0: # if fret=0, no need swap all fingers
-                domains[x].append(fingering + [0])
-            else: # if fret !=0, swap all fingers 1~4
-                for finger1234 in range (1,5):
-    #                 print(finger1234)
-                    domains[x].append(fingering + [finger1234])
+    for note in choNote:
+        domain = funcNote2Domain(note, dicNoteOnFingerBoard)
+        domains.append(domain)
     return domains
+
+# ------ divided into subFunc,
+# let MEL to use the same function "funcNote2Domain" -----
+# 2019/07/20 07:42
+# def funcNoteDomains(choNote, dicNoteOnFingerBoard):
+#     domains = []
+#     x = 0 # variable
+#     for x in range(len(choNote)):
+#         # x = 41
+#         domains.append([])
+#         fingerings = dicNoteOnFingerBoard[choNote[x]]
+#         # fingerings = [[5, 2], [6, 7]]
+#         for fingering in fingerings:
+#             # fingering = [5,2]
+#             if fingering[1] == 0: # if fret=0, no need swap all fingers
+#                 domains[x].append(fingering + [0])
+#             else: # if fret !=0, swap all fingers 1~4
+#                 for finger1234 in range (1,5):
+#     #                 print(finger1234)
+#                     domains[x].append(fingering + [finger1234])
+#     return domains
 
 
 def dicAppend(key, value, dic):
@@ -196,12 +222,12 @@ def funcCSP(domains):
                                 dicAppend((dn,sdn),(domains[dn][pn], domains[sdn][spn]),dicCombination)
                             # c4-1: same fret: lower finger press higher "strings"
                             elif (string0 - string1)*(finger0 - finger1) < 0:
-                                # constraints: finger(0,1) cannot cross string(1,6)
-                                # if (finger0 ==1 or finger1 ==1) and (finger0 ==0 or finger1 ==0):
-                                #     if absStringDiff != 5:
-                                #         dicAppend((dn,sdn),(domains[dn][pn], domains[sdn][spn]),dicCombination)
-                                # else:
-                                dicAppend((dn,sdn),(domains[dn][pn], domains[sdn][spn]),dicCombination)
+                                # constraints: finger(1,2) cannot cross string(1,6)
+                                if (finger0 ==1 or finger1 ==1) and (finger0 ==2 or finger1 ==2):
+                                    if absStringDiff != 5:
+                                        dicAppend((dn,sdn),(domains[dn][pn], domains[sdn][spn]),dicCombination)
+                                else:
+                                    dicAppend((dn,sdn),(domains[dn][pn], domains[sdn][spn]),dicCombination)
 
                         # c2: higher finger press higher frets
                         #     finger0 is stronger
@@ -326,7 +352,7 @@ def funcChordSol(dicCombPreproc, matchDict):
 
         uniqFret = list(set(indexFingerFret))
         if len(uniqFret) != 1:
-            print("Index finger presses more than 1 fret. --> Error")
+            # print("Index finger presses more than 1 fret. --> Error")
             return False
         elif len(uniqFret) ==1:
             uniqFret = uniqFret[0]
