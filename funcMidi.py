@@ -407,6 +407,7 @@ costFinger23SlideUp   = 4
 costFinger4SlideDown  = 5
 costFinger4SlideUp    = 10
 costFingerShiftSlide  =10
+costBetwFret0andOther = 0
 
 costLocalWeight = 0.2
 
@@ -498,7 +499,8 @@ def funcCostFinger(pos0, pos1, plot=False):
     absDeltaFinger = abs(finger0-finger1)
 
     if (finger0 == 0 or finger1 == 0):
-        costStretch = 0.5
+        # costStretch = 0.5
+        costStretch = costBetwFret0andOther
     else:
         #  ********** PWL parameter ***********
         # pwl = [[-1,1,2], [5, 0.5, 2]]
@@ -547,7 +549,8 @@ def drawCostStretchFigure():
 
 
 # Calculate melody transition cost
-def funcCalMelCost(event0Possible, event1Possible):
+# rename: funcCalMelCost -> funcCalMelCostMatrix
+def funcCalMelCostMatrix(event0Possible, event1Possible):
     costMatrixUnit = []
     for pos0 in event0Possible:
         pos0beg =[]
