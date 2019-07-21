@@ -1,4 +1,8 @@
-
+import matplotlib.pyplot as plt
+import numpy as np
+from mido import MidiFile
+import copy
+import itertools
 
 def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFret = 12):
     """ 2019/07/08
@@ -44,7 +48,7 @@ def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFr
 
 
 def MidiCategorize(MidiFileName):
-    from mido import MidiFile
+    # from mido import MidiFile
     mid = MidiFile(MidiFileName)
     for i, track in enumerate(mid.tracks):
         print('Track {}: {}'.format(i, track.name))
@@ -131,8 +135,7 @@ def MidiCategorize(MidiFileName):
         import copy
         import itertools
 """
-import copy
-import itertools
+
 
 # input note, output domain
 def funcNote2Domain(note, dicNoteOnFingerBoard):
@@ -375,3 +378,173 @@ def funcChordSolution(choNote, dicNoteOnFingerBoard):
     dicCombPreproc, matchDict = funcAdversarykill(dicCombination)
     chordSolution = funcChordSol(dicCombPreproc, matchDict)
     return chordSolution
+
+
+
+
+"""
+MELODY best path searching
+Theorism
+Weight(p,q) = ALONG(p,q) + ACROSS(p,q)
+ALONG(p,q) = fret_stretch(p,q) + locality(p,q)
+
+Code:
+cost = costAlong + costAcross
+costAlong = costStretch + costLocal
+"""
+
+# cost parameters
+# can be trained
+costSamePosition = 0
+
+costFinger1SameFret   = 5
+costFinger234SameFret = 10
+
+costFinger1SlideDown  = 3
+costFinger1SlideUp    = 2
+costFinger23SlideDown = 2
+costFinger23SlideUp   = 4
+costFinger4SlideDown  = 5
+costFinger4SlideUp    = 10
+costFingerShiftSlide  =10
+
+costLocalWeight = 0.25
+
+costAcrossMeet = 0.25
+costAcrossOut  = 0.5
+
+# cost Stretch
+
+def funcCalCostAlong(pos0, pos1):
+    finger0 = pos0[2]
+    finger1 = pos1[2]
+    fret0   = pos0[1]
+    fret1   = pos1[1]
+    string0 = pos0[0]
+    string1 = pos1[0]
+
+    # The same position
+    if pos0 == pos1:
+        costStretch = costSamePosition
+    # same finger same string, "slide"
+    elif finger0 == finger1 and string0 == string1:
+
+        if fret0 == fret1: # string different (if string the same, it is the first condition)
+            if finger0 ==1:
+                costStretch = costFinger1SameFret
+            else:
+                costStretch = costFinger234SameFret
+
+        # ----- fret different -----
+        # finger1 is easy to slide upward
+        # but not as much as finger2 & 3 to slide downward
+        elif finger0 == 1:
+            if fret0 > fret1:
+                costStretch = costFinger1SlideDown
+            else:
+                costStretch = costFinger1SlideUp
+        elif finger0 == 2 or finger0 ==3:
+            if fret0 > fret1:
+                costStretch = costFinger23SlideDown
+            else:
+                costStretch = costFinger23SlideUp
+        elif finger0 == 4:
+            if fret0 > fret1:
+                costStretch = costFinger4SlideDown
+            else:
+                costStretch = costFinger4SlideUp
+    elif finger0 == finger1 and string0 != string1:
+        costStretch = costFingerShiftSlide
+    # Other combinations
+    else:
+        costStretch = funcCostFinger(pos0, pos1, plot=False)
+
+    # cost Along = costStretch + costLocality
+    costAlong = costStretch + costLocalWeight*(pos0[1]+pos1[1])
+    return costAlong
+
+def funcCalCostAcross(pos0, pos1):
+    finger0 = pos0[2]
+    finger1 = pos1[2]
+    fret0   = pos0[1]
+    fret1   = pos1[1]
+    string0 = pos0[0]
+    string1 = pos1[0]
+
+    deltaPhysical = abs(string0 -string1) + abs(fret0 - fret1)
+    costAcross = costAcrossMeet if abs(finger0-finger1) == deltaPhysical else costAcrossOut
+    return costAcross
+
+
+
+
+# costStretch between finger1 and finger2
+def funcCostFinger(pos0, pos1, plot=False):
+    finger0 = pos0[2]
+    finger1 = pos1[2]
+    fret0 = pos0[1]
+    fret1 = pos1[1]
+    sign = -1 if finger0 > finger1 else 1
+
+    deltaFret = fret1 - fret0
+    absDeltaFinger = abs(finger0-finger1)
+
+    #  ********** PWL parameter ***********
+#     pwl = [[-1,1,2], [5, 0.5, 2]]
+    pwl = [[-1,absDeltaFinger,absDeltaFinger+1], [5, 0.5, 2]]
+    pwl = np.array(pwl)
+    pwl[0,:] = pwl[0,:]*sign
+    pwl = pwl[:,pwl[0,:].argsort()] # sorting by x value
+
+    costStretch = np.interp(deltaFret, pwl[0,:], pwl[1,:], left=pwl[1,0], right=pwl[1,-1])
+
+    if plot:
+        x = np.linspace(-5, 5, 11)
+        y = np.interp(x, pwl[0,:], pwl[1,:], left=pwl[1,0], right=pwl[1,-1])
+#         plt.subplot(2,1,1)
+        plt.plot(x,y)
+        plt.title("Finger" + str(finger0) + " to Finger" + str(finger1))
+        plt.xlabel("delta fret")
+        plt.ylabel("cost")
+        plt.xticks(np.arange(min(x), max(x)+1, 1.0))
+        plt.grid(True)
+    return costStretch
+
+
+# Draw Cost of Stretch Figure
+def drawCostStretchFigure():
+    pos0 = [3,5,4]
+    pos1 = [3,6,1]
+    plt.subplots(figsize=(16, 10))
+    plt.tight_layout()
+    # plt.subplots_adjust(left=0.2, bottom=0.1, right=0.8, top=0.8,hspace=0.5)
+    plt.subplots_adjust(left=0.1, bottom=0.1, right=0.9, top=0.9,hspace=0.5)
+    for i in range(4):
+        for j in range(4):
+    #         print((i % 4)*4 + ( j % 4) + 1)
+            plt.subplot(4,4, (i % 4)*4 + ( j % 4) + 1)
+            funcCostFinger([3,5, i], [3, 5, j], plot=True)
+    fig = plt.gcf()
+    plt.figure(figsize=(40,20))
+    # fig.savefig('cost_of_stretching.png', dpi=100)
+
+
+# Calculate melody transition cost
+def funcCalMelCost(event0Possible, event1Possible):
+    costMatrixUnit = []
+    for pos0 in event0Possible:
+        pos0beg =[]
+        for pos1 in event1Possible:
+
+            # cost is putting here
+            # initialise cost
+            costStretch = float("inf")
+            costLocal = float("inf")
+            # maybe write a function, input is pos0 and pos1
+            costAlong  = funcCalCostAlong(pos0, pos1)
+            costAcross = funcCalCostAcross(pos0, pos1)
+            cost = costAlong + costAcross
+
+            pos0beg.append(cost)
+        costMatrixUnit.append(pos0beg)
+    return costMatrixUnit
