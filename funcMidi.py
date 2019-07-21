@@ -408,7 +408,7 @@ costFinger4SlideDown  = 5
 costFinger4SlideUp    = 10
 costFingerShiftSlide  =10
 
-costLocalWeight = 0.25
+costLocalWeight = 0.2
 
 costAcrossMeet = 0.25
 costAcrossOut  = 0.5
@@ -471,9 +471,17 @@ def funcCalCostAcross(pos0, pos1):
     string0 = pos0[0]
     string1 = pos1[0]
 
-    deltaPhysical = abs(string0 -string1) + abs(fret0 - fret1)
-    costAcross = costAcrossMeet if abs(finger0-finger1) == deltaPhysical else costAcrossOut
+    # fingero (fret0) has min cost
+    if finger0 ==0 or finger1 ==0:
+        costAcross = costAcrossMeet
+    else:
+        deltaPhysical = abs(string0 -string1) + abs(fret0 - fret1)
+        # default:
+        # costAcrossMeet = 0.25
+        # cost AcrossOut = 0.5
+        costAcross = costAcrossMeet if abs(finger0-finger1) == deltaPhysical else costAcrossOut
     return costAcross
+
 
 
 
@@ -489,25 +497,34 @@ def funcCostFinger(pos0, pos1, plot=False):
     deltaFret = fret1 - fret0
     absDeltaFinger = abs(finger0-finger1)
 
-    #  ********** PWL parameter ***********
-#     pwl = [[-1,1,2], [5, 0.5, 2]]
-    pwl = [[-1,absDeltaFinger,absDeltaFinger+1], [5, 0.5, 2]]
-    pwl = np.array(pwl)
-    pwl[0,:] = pwl[0,:]*sign
-    pwl = pwl[:,pwl[0,:].argsort()] # sorting by x value
+    if (finger0 == 0 or finger1 == 0):
+        costStretch = 0.5
+    else:
+        #  ********** PWL parameter ***********
+        # pwl = [[-1,1,2], [5, 0.5, 2]]
+        pwl = [[-1,absDeltaFinger,absDeltaFinger+1], [5, 0.5, 2]]
+        pwl = [[-10, -1,absDeltaFinger,absDeltaFinger+1, 10], [10, 5, 0.5, 2, 5]]
+        pwl = np.array(pwl)
+        pwl[0,:] = pwl[0,:]*sign
+        pwl = pwl[:,pwl[0,:].argsort()] # sorting by x value
 
-    costStretch = np.interp(deltaFret, pwl[0,:], pwl[1,:], left=pwl[1,0], right=pwl[1,-1])
+        costStretch = np.interp(deltaFret, pwl[0,:], pwl[1,:], left=pwl[1,0], right=pwl[1,-1])
+
 
     if plot:
         x = np.linspace(-5, 5, 11)
-        y = np.interp(x, pwl[0,:], pwl[1,:], left=pwl[1,0], right=pwl[1,-1])
-#         plt.subplot(2,1,1)
-        plt.plot(x,y)
+        if (finger0 == 0 or finger1 == 0):
+            plt.plot(x, [0.5]*len(x))
+        else:
+            y = np.interp(x, pwl[0,:], pwl[1,:], left=pwl[1,0], right=pwl[1,-1])
+            plt.plot(x,y)
+
         plt.title("Finger" + str(finger0) + " to Finger" + str(finger1))
         plt.xlabel("delta fret")
         plt.ylabel("cost")
         plt.xticks(np.arange(min(x), max(x)+1, 1.0))
         plt.grid(True)
+        plt.ylim(0,6)
     return costStretch
 
 
@@ -538,8 +555,8 @@ def funcCalMelCost(event0Possible, event1Possible):
 
             # cost is putting here
             # initialise cost
-            costStretch = float("inf")
-            costLocal = float("inf")
+            # costStretch = float("inf")
+            # costLocal = float("inf")
             # maybe write a function, input is pos0 and pos1
             costAlong  = funcCalCostAlong(pos0, pos1)
             costAcross = funcCalCostAcross(pos0, pos1)
