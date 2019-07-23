@@ -4,6 +4,42 @@ from mido import MidiFile
 import copy
 import itertools
 
+
+# cost parameters
+# can be trained
+costSamePosition = 0
+costAlongFinger0 = 0
+
+costFinger1SameFret   = 5
+costFinger234SameFret = 10
+
+costFinger1SlideDown  = 3
+costFinger1SlideUp    = 2
+costFinger23SlideDown = 2
+costFinger23SlideUp   = 4
+costFinger4SlideDown  = 5
+costFinger4SlideUp    = 10
+costFingerShiftSlide  = 10
+
+costBetwFret0andOther = 0
+
+costLocalWeight = 0.2
+
+costAcrossMeet = 0.25
+costAcrossOut  = 0.5
+
+# cost chord parameters
+costChordWeight = 0.5
+costChordFinger1 = 1
+costChordFinger1withOther = 1
+costChordLocalWeight = 1
+costChordGlobalWeight = 0.2
+costChordFinger4 = 2
+costChordFinger123 = 1
+costChordFingerWeight = 1
+costChordCrowdWeight = 1
+
+
 def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFret = 12):
     """ 2019/07/08
         version 0.0
@@ -372,6 +408,7 @@ def funcChordSol(dicCombPreproc, matchDict):
 
 
 # package: Chord solution
+# add output: costChord
 def funcChordSolution(choNote, dicNoteOnFingerBoard):
     domains = funcNoteDomains(choNote, dicNoteOnFingerBoard)
     dicCombination = funcCSP(domains)
@@ -393,26 +430,6 @@ cost = costAlong + costAcross
 costAlong = costStretch + costLocal
 """
 
-# cost parameters
-# can be trained
-costSamePosition = 0
-
-costFinger1SameFret   = 5
-costFinger234SameFret = 10
-
-costFinger1SlideDown  = 3
-costFinger1SlideUp    = 2
-costFinger23SlideDown = 2
-costFinger23SlideUp   = 4
-costFinger4SlideDown  = 5
-costFinger4SlideUp    = 10
-costFingerShiftSlide  =10
-costBetwFret0andOther = 0
-
-costLocalWeight = 0.2
-
-costAcrossMeet = 0.25
-costAcrossOut  = 0.5
 
 # cost Stretch
 
@@ -427,6 +444,8 @@ def funcCalCostAlong(pos0, pos1):
     # The same position
     if pos0 == pos1:
         costStretch = costSamePosition
+    elif finger0 ==0 or finger1 ==0:
+        costStretch = costAlongFinger0
     # same finger same string, "slide"
     elif finger0 == finger1 and string0 == string1:
 
