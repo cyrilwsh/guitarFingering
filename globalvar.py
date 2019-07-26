@@ -13,7 +13,7 @@ class GlobalVar:
     costFinger23SlideUp   = 4
     costFinger4SlideDown  = 5
     costFinger4SlideUp    = 10
-    costFingerShiftSlide  = 10
+    costFingerShiftSlide  = 3 # ori=10, encounter chord change bug
 
     costBetwFret0andOther = 0
 
@@ -23,7 +23,7 @@ class GlobalVar:
     costAcrossOut  = 0.5
 
     # cost chord parameters
-    costChordWeight = 0.5
+    costChordWeight = 4 # ori=0.5, emphasize Chord
     costChordFinger1 = 1
     costChordFinger1withOther = 1
     costChordLocalWeight = 1

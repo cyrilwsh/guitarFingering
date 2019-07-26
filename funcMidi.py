@@ -444,8 +444,10 @@ def funcCalCostAlong(pos0, pos1):
                 costStretch = GlobalVar.get_costFinger4SlideDown()
             else:
                 costStretch = GlobalVar.get_costFinger4SlideUp()
+    # same finger shift according to its distance
     elif finger0 == finger1 and string0 != string1:
-        costStretch = GlobalVar.get_costFingerShiftSlide()
+        deltaPhysical = abs(string0 -string1) + abs(fret0 - fret1)
+        costStretch = GlobalVar.get_costFingerShiftSlide() * deltaPhysical
     # Other combinations
     else:
         costStretch = funcCostFinger(pos0, pos1, plot=False)
