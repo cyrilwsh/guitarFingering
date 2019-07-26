@@ -390,9 +390,13 @@ def funcChordSol(dicCombPreproc, matchDict):
                 indexFingerFret.append(position[1])
 
         uniqFret = list(set(indexFingerFret))
-        if len(uniqFret) != 1:
+        if len(uniqFret) > 1:
             # print("Index finger presses more than 1 fret. --> Error")
             return False
+        # 20190725 bug-fixed
+        # if no indexfinger, True
+        elif len(uniqFret) ==0:
+            return True
         elif len(uniqFret) ==1:
             uniqFret = uniqFret[0]
 
@@ -587,3 +591,65 @@ def funcCalMelCostMatrix(event0Possible, event1Possible):
             pos0beg.append(cost)
         costMatrixUnit.append(pos0beg)
     return costMatrixUnit
+
+
+
+
+# 計算chord的cost 2019/07/23
+# funcCalChordCost
+
+
+def funcCalChordCost(oneChord):
+    costChordTotal = 0
+    # 1: cost between 2 fingers
+    numNotes = len(oneChord)
+    numFinger1 = 0
+    for pos in oneChord:
+        numFinger1 = numFinger1 + 1 if pos[2] == 1 else numFinger1
+    # 有食指封閉就+0
+    costFinger1 = 0
+    if numFinger1 > 1:
+        costFinger1 = costFinger1 + costChordFinger1
+        # 有封閉加其他指頭
+        if numNotes > numFinger1:
+            costFinger1 = costFinger1 + costChordFinger1withOther
+    # 2: local locality and (global) locality
+    maxFret = max([x[1] for x in oneChord])
+    minFret = min([x[1] for x in oneChord])
+    costLocalLocality = (maxFret - minFret) * costChordLocalWeight
+    costGlobalLocality = maxFret * costChordGlobalWeight
+
+    #3 strong and weak finger, and finger number used
+    costFingers = 0
+    for pos in oneChord:
+        finger = pos[2]
+        if finger == 4:
+            costFingers = costFingers + costChordFinger4
+        else:
+            costFingers = costFingers + costChordFinger123
+    costFingers = costFingers * costChordFingerWeight
+
+    # 4 avoid too crowed
+    costCrowd = 0
+    row0Count = 0
+    while row0Count in range(numNotes):
+        string0 = oneChord[row0Count][0]
+        fret0 = oneChord[row0Count][1]
+        finger0 = oneChord[row0Count][2]
+        row1Count = row0Count + 1
+        while row1Count in range(numNotes):
+            string1 = oneChord[row1Count][0]
+            fret1 = oneChord[row1Count][1]
+            finger1 = oneChord[row1Count][2]
+
+            # same fret, but not finger1(barre), or any one is finger0
+            if fret0 == fret1 and not ((finger0 == finger1 == 1) or (finger0 ==0 or finger1 ==0 ) ):
+                if abs(string1 - string0 ) < abs(finger1 - finger0):
+                    costCrowd = costCrowd + 1
+            row1Count = row1Count + 1
+        row0Count = row0Count + 1
+    costCrowd = costCrowd * costChordCrowdWeight
+
+    # Overall cost
+    costChordTotal = costFinger1 + costLocalLocality + costGlobalLocality + costFingers + costCrowd
+    return costChordTotal
