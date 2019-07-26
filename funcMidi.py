@@ -4,40 +4,7 @@ from mido import MidiFile
 import copy
 import itertools
 
-
-# cost parameters
-# can be trained
-costSamePosition = 0
-costAlongFinger0 = 0
-
-costFinger1SameFret   = 5
-costFinger234SameFret = 10
-
-costFinger1SlideDown  = 3
-costFinger1SlideUp    = 2
-costFinger23SlideDown = 2
-costFinger23SlideUp   = 4
-costFinger4SlideDown  = 5
-costFinger4SlideUp    = 10
-costFingerShiftSlide  = 10
-
-costBetwFret0andOther = 0
-
-costLocalWeight = 0.2
-
-costAcrossMeet = 0.25
-costAcrossOut  = 0.5
-
-# cost chord parameters
-costChordWeight = 0.5
-costChordFinger1 = 1
-costChordFinger1withOther = 1
-costChordLocalWeight = 1
-costChordGlobalWeight = 0.2
-costChordFinger4 = 2
-costChordFinger123 = 1
-costChordFingerWeight = 1
-costChordCrowdWeight = 1
+import globalvar as GlobalVar
 
 
 def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFret = 12):
@@ -447,44 +414,44 @@ def funcCalCostAlong(pos0, pos1):
 
     # The same position
     if pos0 == pos1:
-        costStretch = costSamePosition
+        costStretch = GlobalVar.get_costSamePosition()
     elif finger0 ==0 or finger1 ==0:
-        costStretch = costAlongFinger0
+        costStretch = GlobalVar.get_costAlongFinger0()
     # same finger same string, "slide"
     elif finger0 == finger1 and string0 == string1:
 
         if fret0 == fret1: # string different (if string the same, it is the first condition)
             if finger0 ==1:
-                costStretch = costFinger1SameFret
+                costStretch = GlobalVar.get_costFinger1SameFret()
             else:
-                costStretch = costFinger234SameFret
+                costStretch = GlobalVar.get_costFinger234SameFret()
 
         # ----- fret different -----
         # finger1 is easy to slide upward
         # but not as much as finger2 & 3 to slide downward
         elif finger0 == 1:
             if fret0 > fret1:
-                costStretch = costFinger1SlideDown
+                costStretch = GlobalVar.get_costFinger1SlideDown()
             else:
-                costStretch = costFinger1SlideUp
+                costStretch = GlobalVar.get_costFinger1SlideUp()
         elif finger0 == 2 or finger0 ==3:
             if fret0 > fret1:
-                costStretch = costFinger23SlideDown
+                costStretch = GlobalVar.get_costFinger23SlideDown()
             else:
-                costStretch = costFinger23SlideUp
+                costStretch = GlobalVar.get_costFinger23SlideUp()
         elif finger0 == 4:
             if fret0 > fret1:
-                costStretch = costFinger4SlideDown
+                costStretch = GlobalVar.get_costFinger4SlideDown()
             else:
-                costStretch = costFinger4SlideUp
+                costStretch = GlobalVar.get_costFinger4SlideUp()
     elif finger0 == finger1 and string0 != string1:
-        costStretch = costFingerShiftSlide
+        costStretch = GlobalVar.get_costFingerShiftSlide()
     # Other combinations
     else:
         costStretch = funcCostFinger(pos0, pos1, plot=False)
 
     # cost Along = costStretch + costLocality
-    costAlong = costStretch + costLocalWeight*(pos0[1]+pos1[1])
+    costAlong = costStretch + GlobalVar.get_costLocalWeight()*(pos0[1]+pos1[1])
     return costAlong
 
 def funcCalCostAcross(pos0, pos1):
@@ -497,13 +464,13 @@ def funcCalCostAcross(pos0, pos1):
 
     # fingero (fret0) has min cost
     if finger0 ==0 or finger1 ==0:
-        costAcross = costAcrossMeet
+        costAcross = GlobalVar.get_costAcrossMeet()
     else:
         deltaPhysical = abs(string0 -string1) + abs(fret0 - fret1)
         # default:
         # costAcrossMeet = 0.25
         # cost AcrossOut = 0.5
-        costAcross = costAcrossMeet if abs(finger0-finger1) == deltaPhysical else costAcrossOut
+        costAcross = GlobalVar.get_costAcrossMeet() if abs(finger0-finger1) == deltaPhysical else GlobalVar.get_costAcrossOut()
     return costAcross
 
 
@@ -523,7 +490,7 @@ def funcCostFinger(pos0, pos1, plot=False):
 
     if (finger0 == 0 or finger1 == 0):
         # costStretch = 0.5
-        costStretch = costBetwFret0andOther
+        costStretch = GlobalVar.get_costBetwFret0andOther()
     else:
         #  ********** PWL parameter ***********
         # pwl = [[-1,1,2], [5, 0.5, 2]]
@@ -609,25 +576,25 @@ def funcCalChordCost(oneChord):
     # 有食指封閉就+0
     costFinger1 = 0
     if numFinger1 > 1:
-        costFinger1 = costFinger1 + costChordFinger1
+        costFinger1 = costFinger1 + GlobalVar.get_costChordFinger1()
         # 有封閉加其他指頭
         if numNotes > numFinger1:
-            costFinger1 = costFinger1 + costChordFinger1withOther
+            costFinger1 = costFinger1 + GlobalVar.get_costChordFinger1withOther()
     # 2: local locality and (global) locality
     maxFret = max([x[1] for x in oneChord])
     minFret = min([x[1] for x in oneChord])
-    costLocalLocality = (maxFret - minFret) * costChordLocalWeight
-    costGlobalLocality = maxFret * costChordGlobalWeight
+    costLocalLocality = (maxFret - minFret) * GlobalVar.get_costChordLocalWeight()
+    costGlobalLocality = maxFret * GlobalVar.get_costChordGlobalWeight()
 
     #3 strong and weak finger, and finger number used
     costFingers = 0
     for pos in oneChord:
         finger = pos[2]
         if finger == 4:
-            costFingers = costFingers + costChordFinger4
+            costFingers = costFingers + GlobalVar.get_costChordFinger4()
         else:
-            costFingers = costFingers + costChordFinger123
-    costFingers = costFingers * costChordFingerWeight
+            costFingers = costFingers + GlobalVar.get_costChordFinger123()
+    costFingers = costFingers * GlobalVar.get_costChordFingerWeight()
 
     # 4 avoid too crowed
     costCrowd = 0
@@ -648,7 +615,7 @@ def funcCalChordCost(oneChord):
                     costCrowd = costCrowd + 1
             row1Count = row1Count + 1
         row0Count = row0Count + 1
-    costCrowd = costCrowd * costChordCrowdWeight
+    costCrowd = costCrowd * GlobalVar.get_costChordCrowdWeight()
 
     # Overall cost
     costChordTotal = costFinger1 + costLocalLocality + costGlobalLocality + costFingers + costCrowd
