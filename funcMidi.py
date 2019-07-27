@@ -583,8 +583,16 @@ def funcCalChordCost(oneChord):
         if numNotes > numFinger1:
             costFinger1 = costFinger1 + GlobalVar.get_costChordFinger1withOther()
     # 2: local locality and (global) locality
-    maxFret = max([x[1] for x in oneChord])
-    minFret = min([x[1] for x in oneChord])
+    frets = [x[1] for x in oneChord]
+    npFrets = np.array(frets)
+    maxFret = np.max(npFrets)
+    if maxFret != 0:
+        minFret = np.min(np.nonzero(npFrets)) # avoid fret0 has high cost
+    else:
+        minFret = 0
+    # maxFret = max([x[1] for x in oneChord])
+    # minFret = [x[1] for x in oneChord]
+
     costLocalLocality = (maxFret - minFret) * GlobalVar.get_costChordLocalWeight()
     costGlobalLocality = maxFret * GlobalVar.get_costChordGlobalWeight()
 
