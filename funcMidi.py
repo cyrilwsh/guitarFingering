@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from mido import MidiFile
+""" Copy right for mido
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
 import copy
 import itertools
 
@@ -467,6 +470,12 @@ def funcCalCostAcross(pos0, pos1):
     # fingero (fret0) has min cost
     if finger0 ==0 or finger1 ==0:
         costAcross = GlobalVar.get_costAcrossMeet()
+    elif fret0 == fret1:
+        # smaller finger press lower string
+        if (finger0 - finger1) * (string0 - string1) < 0:
+            costAcross = GlobalVar.get_costAcrossMeet()
+        else:
+            costAcross = GlobalVar.get_costAcrossOut()
     else:
         deltaPhysical = abs(string0 -string1) + abs(fret0 - fret1)
         # default:
@@ -630,3 +639,314 @@ def funcCalChordCost(oneChord):
     # Overall cost
     costChordTotal = costFinger1 + costLocalLocality + costGlobalLocality + costFingers + costCrowd
     return costChordTotal
+
+
+"""
+Final Integration
+Through all MEL, CHO, MIX
+"""
+
+def dicNameNotes(notes):
+    # input example: dicNameNotes([45, 63])
+    # output example: ['A2', 'D#4']
+    names = []
+    for note in notes:
+        modNote = note % 12
+        if modNote == 0:
+            names.append('C'+str(note//12-1))
+        elif modNote ==1:
+            names.append('C#'+str(note//12 -1))
+        elif modNote ==2:
+            names.append('D'+str(note//12 -1))
+        elif modNote ==3:
+            names.append('D#'+str(note//12 -1))
+        elif modNote ==4:
+            names.append('E'+str(note//12 -1))
+        elif modNote ==5:
+            names.append('F'+str(note//12 -1))
+        elif modNote ==6:
+            names.append('F#'+str(note//12 -1))
+        elif modNote ==7:
+            names.append('G'+str(note//12 -1))
+        elif modNote ==8:
+            names.append('G#'+str(note//12 -1))
+        elif modNote ==9:
+            names.append('A'+str(note//12 -1))
+        elif modNote ==10:
+            names.append('A#'+str(note//12 -1))
+        elif modNote ==11:
+            names.append('B'+str(note//12 -1))
+    return names
+
+
+# list by event
+
+def funcMidiEvents(midiArray, calEventNum = float("inf"), fromNumber = 0):
+    events = []
+    nn = fromNumber
+    while nn < len(midiArray) and midiArray[nn][-1] <= calEventNum:
+        if midiArray[nn][3] == 'MEL':
+            events.append([midiArray[nn][:-1]])
+            nn = nn + 1
+        elif midiArray[nn][3] == 'MIX' or midiArray[nn][3] == 'CHO':
+            subEvents = []
+            currentEvent = midiArray[nn][4]
+            while nn < len(midiArray) and midiArray[nn][4] == currentEvent and midiArray[nn][-1] <= calEventNum:
+                subEvents.append(midiArray[nn][:-1])
+                nn = nn + 1
+            events.append(subEvents)
+        else:
+            break
+    # unique time
+    lastDMY = midiArray[-1][3]
+    if lastDMY == 'MIX' or lastDMY == 'MEL' or lastDMY == 'CHO':
+        allTime = [x[1:3] for x in midiArray]
+    else:
+        allTime = [x[1:3] for x in midiArray[:-1] ] # ignore dummy line
+    flatAllTime = sum(allTime, [])
+    uniqTime = list(set(flatAllTime))
+    uniqTime.sort()
+
+    return events, uniqTime
+
+
+# 依照時間 產生出note 包含tied note
+# according to the time, output eventNotes, "tied note" included
+def funcArrangeEventNotes(events):
+    eventsNotes = []
+    for event in events:
+        if len(event) == 1:
+            eventsNotes.append([event[0][0]])
+        elif event[0][-1] =='CHO':
+            choNotes = [x[0] for x in event]
+            eventsNotes.append(choNotes)
+
+        # most complex condition
+        # made tied note to be Negative
+        elif event[0][-1] == 'MIX':
+            allTime = [x[1:3] for x in event]
+            flatAllTime = sum(allTime, [])
+            uniqTime = list(set(flatAllTime))
+            uniqTime.sort()
+
+            subEventNotes = []
+            tempNotes = []
+            for time in uniqTime[:-1]:
+
+                for note in event:
+                    if note[1] < time < note[2]:
+                        try:
+                            tempNotes[tempNotes.index(note[0])] = -note[0]
+                        except:
+                            pass
+                    elif note[1] == time:
+                        tempNotes.append(note[0])
+                    elif note[2] == time:
+                        try:
+                            tempNotes.remove(note[0])
+                        except:
+                            tempNotes.remove(-note[0])
+                subEventNotes.append(copy.deepcopy(tempNotes)) # should use deepcopy instead of copy
+            for x in subEventNotes:
+                eventsNotes.append(x)
+
+    return eventsNotes
+
+
+# run through events
+# 有BUG存在!!!
+# 目前len = 1的情況下 沒有去判斷延音
+def funcNotes2Possibles(eventsNotes, dicNoteOnFingerBoard):
+    possible =[]
+    for choNote in eventsNotes:
+        if len(choNote) == 1 :
+            # BUG IS HERE ---------------------------------vvvvvvvvvvvvvv
+            if choNote[0] < 0:
+                print("BUG, no constraints for tied note when there is only one note")
+            possible.append([ [x] for x in funcNote2Domain(abs(choNote[0]), dicNoteOnFingerBoard)])
+    #         possible.append([funcNote2Domain(choNote[0], dicNoteOnFingerBoard)])
+        else:
+            subPossible = funcChordSolution(list(map(abs, choNote)), dicNoteOnFingerBoard)
+            possible.append(subPossible)
+    # 如果是從前一個就start, 還沒結束的NOte, 改為 -Note (如-55)
+    # 當作一個標記flag
+    # 算chord solution時要拿abs
+    # 可是算path的時候
+    # 有看到負號就只能抓前一組相同的note posibtion
+    return possible
+
+
+
+# @@@@@@@@@ MIX 的版本 @@@@@@@@@
+# 從MELODY 摳過來的
+# 這邊不能合成function
+# 因為要跟MEL 和 CHO 一起混著做
+# 這邊只是確定funcCalMixCostMatrix 正確
+# cost有先加previous再做運算的正確版
+
+
+def funcBestPath(eventsNotes, possible, printCostChord = False, printCostTran = False):
+    costBest = []
+
+    iniSize = len(possible[0])
+    npPreMinValue = np.zeros(iniSize)
+    preMinIndex = [[0] for i in range(iniSize)]
+    for i in range(len(possible)-1):
+        event0Possible = possible[i]
+        event1Possible = possible[i+1]
+        mixNotes0 = eventsNotes[i]
+        mixNotes1 = eventsNotes[i+1]
+        # calculate MIX cost
+        costMatrixUnitTran, costMatrixUnitChord = funcCalTranCostMatrix(event0Possible, event1Possible, mixNotes0, mixNotes1)
+        npCostMatrixUnitTran = np.array(costMatrixUnitTran)
+        npCostMatrixUnitChord = np.array(costMatrixUnitChord)
+
+        # add pre value to matrix
+        npNewPreCostMatrix = np.zeros([len(npPreMinValue), np.shape(npCostMatrixUnitTran)[1]])
+        for rwi in range(len(npPreMinValue)):
+            npNewPreCostMatrix[rwi, :] = npPreMinValue[rwi]
+        # total cost of this transition
+        npCostMatrixUnit = npCostMatrixUnitChord + npCostMatrixUnitTran + npNewPreCostMatrix
+
+        # print each costMatrixUnit independently, for debug
+        if (printCostChord or printCostTran):
+            # np print won't be limited
+            np.set_printoptions(threshold=np.inf)
+            print("number = " + str(i))
+            if printCostChord:
+                print("printCostChord =")
+                print(np.around(npCostMatrixUnitChord, decimals = 0))
+            if printCostTran:
+                print("printCostTran =")
+                print(np.around(npCostMatrixUnitTran, decimals = 0))
+            print("printCostAll =")
+            print(np.around(npCostMatrixUnit, decimals = 0))
+            print("")
+
+        # do matrix summary: minValue + minIndex
+        npMinValue = np.min(npCostMatrixUnit, axis = 0)
+        npMinIndex = np.argmin(npCostMatrixUnit, axis = 0)
+        minIndex = list(npMinIndex)
+
+        # initialize for combining with previous event
+        npCombMinValue = np.zeros(len(npMinValue))
+        combMinIndex = [0 for icmi in range(len(npMinValue))]
+
+        # minValue
+        for imin in range(len(npMinValue)):
+            npCombMinValue[imin] = npMinValue[imin] + npPreMinValue[npMinIndex[imin]]
+            combMinIndex[imin] = copy.deepcopy(preMinIndex[npMinIndex[imin]])
+            combMinIndex[imin].append(copy.deepcopy(minIndex[imin]))
+        npPreMinValue = npCombMinValue
+        preMinIndex = combMinIndex
+
+    #     minSummary = np.vstack
+        costBest.append(copy.deepcopy([npCombMinValue,combMinIndex]))
+    return costBest
+# costBest[-1]
+
+
+
+# 這個Function 也可以用在melody to Mix, 不會被限制
+# 他也許可以改為funcTranCostUnit, 專門比較transition的cost
+def funcCalTranCostUnit(mixPos0, mixPos1,mixNotes0, mixNotes1, printOut = False):
+
+    costTran = 0
+    costAlongAll = 0
+    costAcrossAll = 0
+    costTiedNote = 0
+    for ipos0 in range(len(mixPos0)):
+#         print("ipos0=" + str(ipos0))
+        for ipos1 in range(len(mixPos1)):
+#             print("ipos1=" + str(ipos1))
+            if mixNotes1[ipos1] < 0:
+                costTiedNote = 0 # initialize tied-note
+                try:
+                    relativeNote0Index = mixNotes0.index(abs(mixNotes1[ipos1]))
+                except:
+                    relativeNote0Index = mixNotes0.index(   (mixNotes1[ipos1]))
+#                 print("relativeNote0Index = " + str(relativeNote0Index))
+                if mixPos1[ipos1] != mixPos0[ relativeNote0Index]:
+#                     print("negative and !=")
+                    costTiedNote = float("inf")
+                    break
+                # 可以走到這代表前次和這次的position相同
+                # costAlong = 0, 所以不用做任何相加
+            else:
+                costAlong    = funcCalCostAlong(mixPos0[ipos0], mixPos1[ipos1])
+                costAcross   = funcCalCostAcross(mixPos0[ipos0], mixPos1[ipos1])
+#                 print("mixPos0[0] =" + str(mixPos0[0]))
+#                 print("mixPos1[0] =" + str(mixPos1[0]))
+#                 print("ipos0 =" + str(ipos0) + ", ipos1 = " + str(ipos1) + ", costAlong=" + str(costAlong))
+#                 print("costAcross="+str(costAcross))
+                # 先分開測測看
+                costAlongAll = costAlongAll + costAlong
+                costAcrossAll = costAcrossAll + costAcross
+                #原本的是costTrain
+#                 costTran = costTran + costAlong + costAcross
+    ##### debug use #####
+#     if mixPos0 == [[6, 3, 1], [2, 0, 0], [3, 0, 0]] and mixPos1 ==[[6, 3, 1], [4, 0, 0]] :
+
+#     print("costAlong = " + str(costAlongAll))
+#     print("costAcross = " + str(costAcrossAll))
+    costTran = costAlongAll + costAcrossAll + costTiedNote
+
+    costChord0   = funcCalChordCost(mixPos0)
+    costChord1   = funcCalChordCost(mixPos1)
+    costChord = (costChord0 + costChord1)* GlobalVar.get_costChordWeight()
+#     costMixTotal = costMixTotal+ costChord
+#     print(costChord)
+    return costTran, costChord
+
+# costMixTotal
+
+
+
+# Calculate MIX transition cost
+
+def funcCalTranCostMatrix(event0Possible, event1Possible, mixNotes0, mixNotes1):
+    costMatrixUnitTran = []
+    costMatrixUnitChord = []
+    for mixPos0 in event0Possible:
+        pos0beg =[]
+        pos0begChord = []
+        for mixPos1 in event1Possible:
+
+            # cost is putting here
+            costTran, costChord = funcCalTranCostUnit(mixPos0, mixPos1,mixNotes0, mixNotes1)
+
+            # melody: highly dependent to Tran
+            # chord: lower dependent to Tran
+            if len(mixPos0) > 1 or len(mixPos1) > 1:
+                costTran = costTran * 0.25
+
+            pos0beg.append(costTran)
+            pos0begChord.append(costChord)
+        costMatrixUnitTran.append(pos0beg)
+        costMatrixUnitChord.append(pos0begChord)
+    return costMatrixUnitTran, costMatrixUnitChord
+
+
+
+# Solutions
+# 看要不要直接input costBest[-1][1]
+# 裡面比較不用寫這麼複雜
+
+def funcSolutions(costBest, possible, printOut=False):
+    solutions = []
+
+    print("Best paths of the last stage:") if printOut else None
+    for choose in range(len(costBest[-1][1])):
+        bestPathNumber = costBest[-1][1][choose][1:]
+#         print(bestPathNumber)  if printOut else None
+        bestPath = []
+        for i in range(len(bestPathNumber)):
+            bestPath.append(possible[i][bestPathNumber[i]])
+        bestPath.append(possible[-1][choose])
+        print("cost=" + '%.2f' % costBest[-1][0][choose] )  if printOut else None
+        print(" " + str(bestPath)) if printOut else None
+        solutions.append(["cost =", costBest[-1][0][choose], bestPath ])
+
+    choose = np.argmin(costBest[-1][0], axis = 0)
+    bestSolution = solutions[choose]
+    return solutions, bestSolution
