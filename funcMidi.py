@@ -489,6 +489,7 @@ def funcCalCostAcross(pos0, pos1):
 
 
 # costStretch between finger1 and finger2
+# costStretch between finger1 and finger2
 def funcCostFinger(pos0, pos1, plot=False):
     finger0 = pos0[2]
     finger1 = pos1[2]
@@ -501,6 +502,10 @@ def funcCostFinger(pos0, pos1, plot=False):
 
     if (finger0 == 0 or finger1 == 0):
         # costStretch = 0.5
+        print("It should not enter this condition, funcCostFinger or funcCalCostAlong should be wrong")
+        costStretch = GlobalVar.get_costBetwFret0andOther()
+    elif (finger0 == finger1):
+        print("It should not enter this condition, funcCostFinger or funcCalCostAlong should be wrong")
         costStretch = GlobalVar.get_costBetwFret0andOther()
     else:
         #  ********** PWL parameter ***********
@@ -518,6 +523,8 @@ def funcCostFinger(pos0, pos1, plot=False):
         x = np.linspace(-5, 5, 11)
         if (finger0 == 0 or finger1 == 0):
             plt.plot(x, [0.5]*len(x))
+        elif finger0 == finger1:
+            return costStretch
         else:
             y = np.interp(x, pwl[0,:], pwl[1,:], left=pwl[1,0], right=pwl[1,-1])
             plt.plot(x,y)
@@ -527,7 +534,7 @@ def funcCostFinger(pos0, pos1, plot=False):
         plt.ylabel("cost")
         plt.xticks(np.arange(min(x), max(x)+1, 1.0))
         plt.grid(True)
-        plt.ylim(0,6)
+        plt.ylim(0,10)
     return costStretch
 
 
@@ -542,11 +549,12 @@ def drawCostStretchFigure():
     for i in range(4):
         for j in range(4):
     #         print((i % 4)*4 + ( j % 4) + 1)
-            plt.subplot(4,4, (i % 4)*4 + ( j % 4) + 1)
-            funcCostFinger([3,5, i], [3, 5, j], plot=True)
+            if i != j:
+                plt.subplot(4,4, (i % 4)*4 + ( j % 4) + 1)
+                funcCostFinger([3,5, i], [3, 5, j], plot=True)
     fig = plt.gcf()
     plt.figure(figsize=(40,20))
-    # fig.savefig('cost_of_stretching.png', dpi=100)
+#     fig.savefig('cost_of_stretching_20190808.png', dpi=100)
 
 
 # Calculate melody transition cost
