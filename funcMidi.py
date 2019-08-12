@@ -10,7 +10,7 @@ import itertools
 import globalvar as GlobalVar
 
 
-def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFret = 12):
+def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFret = 12, printFingerboard = False):
     """ 2019/07/08
         version 0.0
     """
@@ -19,8 +19,8 @@ def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFr
     in real world physical way, it looks like left-right-reversed
     capo = 1
     """
-    print("capo = " + str(capo))
-    print("tuning = " + str(tuning))
+    print("capo = " + str(capo)) if printFingerboard == True else None
+    print("tuning = " + str(tuning))  if printFingerboard == True else None
     # set 0 fret initial note -- AKA guitar tuning
     arrayFingerBoard = [tuning]
     arrayFingerBoard = [[string+capo for string in arrayFingerBoard[0]]]
@@ -28,12 +28,13 @@ def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFr
     for fret in range (maxAvailableFret - capo):
         arrayFingerBoard.append([string+1 for string in arrayFingerBoard[-1]])
 
-    # print out Finger Board
-    print("Notes in Finger board:")
-    # print("string 1 to 6")
-    arrayFingerBoardTranspose = map(list, zip(*arrayFingerBoard))
-    for string in arrayFingerBoardTranspose:
-        print(string)
+    if printFingerboard == True :
+        # print out Finger Board
+        print("Notes in Finger board:")
+        # print("string 1 to 6")
+        arrayFingerBoardTranspose = map(list, zip(*arrayFingerBoard))
+        for string in arrayFingerBoardTranspose:
+            print(string)
 
 
     # create a dictionary: note - position
@@ -57,7 +58,7 @@ def MidiCategorize(MidiFileName):
     # from mido import MidiFile
     mid = MidiFile(MidiFileName)
     for i, track in enumerate(mid.tracks):
-        print('Track {}: {}'.format(i, track.name))
+        # print('Track {}: {}'.format(i, track.name))
         a = 0
         midiArray= []
         dicCurrentNote = {}
@@ -718,17 +719,21 @@ def funcMidiEvents(midiArray, calEventNum = float("inf"), fromNumber = 0):
     return events, uniqTime
 
 
+
 # 依照時間 產生出note 包含tied note
 # according to the time, output eventNotes, "tied note" included
 def funcArrangeEventNotes(events):
+    # print("can I modify it")
     eventsNotes = []
+    eventsTimeInfo = []
     for event in events:
-        if len(event) == 1:
+        if len(event) == 1: # MEL condition
             eventsNotes.append([event[0][0]])
+            eventsTimeInfo.append(event[0][1:3])
         elif event[0][-1] =='CHO':
             choNotes = [x[0] for x in event]
             eventsNotes.append(choNotes)
-
+            eventsTimeInfo.append(event[0][1:3])
         # most complex condition
         # made tied note to be Negative
         elif event[0][-1] == 'MIX':
@@ -738,9 +743,11 @@ def funcArrangeEventNotes(events):
             uniqTime.sort()
 
             subEventNotes = []
+#             subTimeInfo = []
             tempNotes = []
-            for time in uniqTime[:-1]:
-
+#             for time in uniqTime[:-1]:
+            for itime in range (len(uniqTime)-1): # 改成number
+                time = uniqTime[itime]
                 for note in event:
                     if note[1] < time < note[2]:
                         try:
@@ -755,10 +762,12 @@ def funcArrangeEventNotes(events):
                         except:
                             tempNotes.remove(-note[0])
                 subEventNotes.append(copy.deepcopy(tempNotes)) # should use deepcopy instead of copy
+                eventsTimeInfo.append([time, uniqTime[itime+1]])
             for x in subEventNotes:
                 eventsNotes.append(x)
 
-    return eventsNotes
+
+    return eventsNotes, eventsTimeInfo
 
 
 # run through events
