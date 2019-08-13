@@ -4,6 +4,8 @@ from mido import MidiFile
 """ Copy right for mido
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
+from fpdf import FPDF
+
 import copy
 import itertools
 
@@ -54,23 +56,33 @@ def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFr
 
 
 
-def MidiCategorize(MidiFileName):
+def MidiCategorize(MidiFileName, trackChoice = 0):
     # from mido import MidiFile
     mid = MidiFile(MidiFileName)
     for i, track in enumerate(mid.tracks):
-        # print('Track {}: {}'.format(i, track.name))
-        a = 0
-        midiArray= []
-        dicCurrentNote = {}
-        currentTime = 0
-        for msg in track:
-            if msg.type[:4] == "note":
-                currentTime = currentTime + msg.time
-                if msg.type == "note_on":
-                    midiArray.append([msg.note, currentTime, 'OffsetNotYetGiven', 'CatNotYetGiven', 'eventNotGiven'])
-                    dicCurrentNote[msg.note] = len(midiArray)-1 # save this number of row
-                elif msg.type == "note_off":
-                    midiArray[dicCurrentNote[msg.note]][2] = currentTime # change thie offsetTime by its onset row
+        print('Track {}: {}'.format(i, track.name))
+        if i == trackChoice:
+            print('choose track ' + str(i))
+            a = 0
+            midiArray= []
+            dicCurrentNote = {}
+            currentTime = 0
+            for msg in track:
+                if msg.type[:4] == "note":
+                    currentTime = currentTime + msg.time
+                    if msg.type == "note_on":
+                        # solve continuous same note note-on
+                        # assign next start-time as previous stop time if stop time not assigned
+                        try:
+                            if midiArray[dicCurrentNote[msg.note]][2] =='OffsetNotYetGiven':
+                                midiArray[dicCurrentNote[msg.note]][2] = currentTime
+                        except:
+                            None
+                            
+                        midiArray.append([msg.note, currentTime, 'OffsetNotYetGiven', 'CatNotYetGiven', 'eventNotGiven'])
+                        dicCurrentNote[msg.note] = len(midiArray)-1 # save this number of row
+                    elif msg.type == "note_off":
+                        midiArray[dicCurrentNote[msg.note]][2] = currentTime # change thie offsetTime by its onset row
     midiArray.append([0, currentTime+999, currentTime+1000, 'dummy line', 'dummy line'])
 
     """ A function to add count to a dictionary
@@ -973,30 +985,38 @@ def funcSolutions(costBest, possible, printOut=False):
 # output: timeResolution, quaver, oneBar
 def genTimeInfo(uniqTime, printOut = False):
     npUniqTime = np.array(uniqTime)# - uniqTime[:-1]
-#     print(npUniqTime)
     diffUniqTime = npUniqTime[1:] - npUniqTime[:-1]
     diffUniqTimeSet = list(set(diffUniqTime)) # suggestion that user can choose for timeResolution
     diffUniqTimeSet.sort()
 
     timeResolution = 0
-    itr = 0
-    while timeResolution == 0:
-        sta = diffUniqTimeSet[itr]
-        for stb in diffUniqTimeSet:
-            if stb != sta:
-                if stb % sta == 0:
-                    timeResolution = sta
-                    break
-        itr = itr + 1
+    if len(diffUniqTimeSet) == 1:
+        timeResolution = diffUniqTimeSet[0]
+    else:
+        itr = 0
+        while timeResolution == 0:
+            sta = diffUniqTimeSet[itr]
+            for stb in diffUniqTimeSet:
+                if stb != sta:
+                    if stb % sta == 0:
+                        timeResolution = sta
+                        break
+            itr = itr + 1
 
     (val, counts) = np.unique(diffUniqTime, return_counts = True)
     quaver = val[np.argmax(counts)] # assume that most common time interval is the quaver (8th note)
     oneBar = 8* quaver
     if printOut == True:
+        print("for debug usage:")
+        print("npUniqTime = " + str(npUniqTime))
+        print("diffUniqTime = " + str(diffUniqTime))
+        print("diffUniqTimeSet =" + str(diffUniqTimeSet))
+        print("outputs:")
         print("timeResolution =" + str(timeResolution))
         print("quaver =" + str(quaver))
         print("oneBar =" + str(oneBar))
     return timeResolution, quaver, oneBar, npUniqTime
+
 
 # get print arrays, save into array, both horizontal and vertical
 def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeResolution = 32, oneBar = 1024, numPrintBar = 1):
@@ -1097,10 +1117,49 @@ def printSolution(verticalPrintArray, horizontalPrintArray, printDirection = "ho
         print('\x1b[1m') # bold font
         for block in horizontalPrintArray[1:]:
             blockT = list(zip(*block))
-            for line in reversed(blockT):
+
+            for i in range(len(blockT)-1,-1,-1): # reversed(blockT):
+                line = blockT[i]
+                print("==="*len(line)) if i == len(blockT)-1 else None
+#             for line in reversed(blockT):
                 print(*line, sep="")
             print("==="*len(line))
     elif printDirection == "vertical":
         print('\x1b[1m')
         for line in (verticalPrintArray):
             print(*line, sep="")
+
+
+
+# print to pdf file
+def printPDF(verticalPrintArray, horizontalPrintArray, outputPdfName = "guitarFingering.pdf", printDirection = "horizontal", rowsPerPage = 3, linespace = 5):
+    # from fpdf import FPDF
+#     rowsPerPage = 3
+#     printDirection = "horizontal"
+    pdf = FPDF()
+    pdf.set_left_margin(1)#margin: float)
+    pdf.set_top_margin(1)#margin: float)
+    # pdf.add_page()
+    pdf.set_font("courier", size=10)
+#     linespace = 5
+
+    rows = 0
+    if printDirection == "horizontal":
+        for block in horizontalPrintArray[1:]:
+
+            pdf.add_page() if rows % rowsPerPage == 0 else None
+            blockT = list(zip(*block))
+
+            for i in range(len(blockT)-1,-1,-1): # reversed(blockT):
+    #         for line in reversed(blockT):
+                line = blockT[i]
+                pdf.cell(0, linespace, txt = "==="*len(line), ln=1) if i == len(blockT)-1 else None
+                pdf.cell(0, linespace, txt="".join(line), ln=1)
+            pdf.cell(0, linespace, txt = "==="*len(line), ln=1)
+            rows = rows + 1
+
+    elif printDirection == "vertical":
+        pdf.add_page()
+        for line in (verticalPrintArray):
+            pdf.cell(0, linespace, txt = "".join(line), ln=1)
+    pdf.output(outputPdfName)
