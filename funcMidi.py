@@ -967,3 +967,140 @@ def funcSolutions(costBest, possible, printOut=False):
     choose = np.argmin(costBest[-1][0], axis = 0)
     bestSolution = solutions[choose]
     return solutions, bestSolution
+
+
+# deal with time signature
+# output: timeResolution, quaver, oneBar
+def genTimeInfo(uniqTime, printOut = False):
+    npUniqTime = np.array(uniqTime)# - uniqTime[:-1]
+#     print(npUniqTime)
+    diffUniqTime = npUniqTime[1:] - npUniqTime[:-1]
+    diffUniqTimeSet = list(set(diffUniqTime)) # suggestion that user can choose for timeResolution
+    diffUniqTimeSet.sort()
+
+    timeResolution = 0
+    itr = 0
+    while timeResolution == 0:
+        sta = diffUniqTimeSet[itr]
+        for stb in diffUniqTimeSet:
+            if stb != sta:
+                if stb % sta == 0:
+                    timeResolution = sta
+                    break
+        itr = itr + 1
+
+    (val, counts) = np.unique(diffUniqTime, return_counts = True)
+    quaver = val[np.argmax(counts)] # assume that most common time interval is the quaver (8th note)
+    oneBar = 8* quaver
+    if printOut == True:
+        print("timeResolution =" + str(timeResolution))
+        print("quaver =" + str(quaver))
+        print("oneBar =" + str(oneBar))
+    return timeResolution, quaver, oneBar, npUniqTime
+
+# get print arrays, save into array, both horizontal and vertical
+def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeResolution = 32, oneBar = 1024, numPrintBar = 1):
+    # timeResolution = 32
+    # numPrintBar = 1
+    # 用eventsTimeInfo 去掃
+    printEventsNotes = copy.deepcopy(eventsNotes)
+    printEventsTimeInfo = copy.deepcopy(eventsTimeInfo)
+    printBestSolution = copy.deepcopy(bestSolution[2])
+
+    verticalPrintArray = []
+    horizontalPrintArrayUnit = []
+    horizontalPrintArray = []
+    v6 = [" | " for x in range(6) ]
+    d6 = [" . " for x in range(6) ]
+    s5 = [" " for x in range(2) ]
+    tempV = copy.deepcopy(v6)
+    tempV.extend(s5)
+    tempV.extend(copy.deepcopy(v6))
+    tempD = copy.deepcopy(d6)
+    tempD.extend(s5)
+    tempD.extend(copy.deepcopy(d6))
+
+
+    printStatus = npUniqTime[0]
+    verticalPrintArray.append([" E  A  D  G  B  E          Fingerings"])
+    for timeInfo in eventsTimeInfo:
+        start = timeInfo[0]
+        end = timeInfo[1]
+
+        # print bar
+        if printStatus % oneBar == 0:
+            verticalPrintArray.append(["------------------     ------------------"])
+            horizontalPrintArrayUnit.append(tempV)
+
+        # if print Vertically, choose how many bars per row
+        if printStatus % (oneBar * numPrintBar) == 0 :
+            horizontalPrintArray.append(horizontalPrintArrayUnit)
+            horizontalPrintArrayUnit = []
+            horizontalPrintArrayUnit.append([" E ", " A ", " D ", " G ", " B ", " E ", "   ", "   ", " R ", " E ", " G ", " N ", " I ", " F "])
+
+        # print empty time
+        while printStatus < start:
+            verticalPrintArray.append([" .  .  .  .  .  .       .  .  .  .  .  . "])
+            horizontalPrintArrayUnit.append(tempD)
+            printStatus = printStatus + timeResolution
+        attacked = 0 # after start, keep the cotinous or tied note as " | "
+        while printStatus < end:
+            strs = [" . " for x in range(6) ]
+            fings = [" . " for x in range(6) ]
+            strsV = [" . " for x in range(6) ]
+            fingsV = [" . " for x in range(6) ]
+
+            for ifingering in range(len(printBestSolution[0])):
+                fingering = printBestSolution[0][ifingering]
+                note = printEventsNotes[0][ifingering]
+                if note < 0: # Tied note
+                    strs[fingering[0]-1] = " | "
+                    fings[fingering[0]-1] = " | "
+                    strsV[fingering[0]-1] = "---"
+                    fingsV[fingering[0]-1] = "---"
+
+                elif attacked == 0:
+                    strs[fingering[0]-1] =  " " + str(fingering[1]) + " " if len(str(fingering[1])) == 1 else " " + str(fingering[1])
+                    fings[fingering[0]-1] = " " + str(fingering[2]) + " "
+                    strsV[fingering[0]-1] = " " + str(fingering[1]) + " " if len(str(fingering[1])) == 1 else " " + str(fingering[1])
+                    fingsV[fingering[0]-1] = " " + str(fingering[2]) + " "
+                else:
+                    strs[fingering[0]-1] = " | "
+                    fings[fingering[0]-1] = " | "
+                    strsV[fingering[0]-1] = "---"
+                    fingsV[fingering[0]-1] = "---"
+            attacked = 1
+            printStatus = printStatus + timeResolution
+            strsV.reverse()
+            tempHorizontalPrint = copy.deepcopy(strsV)
+            tempHorizontalPrint.extend(s5)
+            fingsV.reverse()
+            tempHorizontalPrint.extend(fingsV)
+
+            horizontalPrintArrayUnit.append(tempHorizontalPrint)
+
+            tempVerticalPrint = [x for x in reversed(strs)]
+            tempVerticalPrint.extend(["     "])
+            tempVerticalPrint.extend([x for x in reversed(fings)])
+            verticalPrintArray.append(tempVerticalPrint)
+        # after printed, del element
+        del printEventsNotes[0]
+        del printEventsTimeInfo[0]
+        del printBestSolution[0]
+    horizontalPrintArray.append(horizontalPrintArrayUnit)
+    return verticalPrintArray, horizontalPrintArray
+
+#  print solution, horizontal or vertical
+def printSolution(verticalPrintArray, horizontalPrintArray, printDirection = "horizontal"):
+
+    if printDirection == "horizontal":
+        print('\x1b[1m') # bold font
+        for block in horizontalPrintArray[1:]:
+            blockT = list(zip(*block))
+            for line in reversed(blockT):
+                print(*line, sep="")
+            print("==="*len(line))
+    elif printDirection == "vertical":
+        print('\x1b[1m')
+        for line in (verticalPrintArray):
+            print(*line, sep="")
