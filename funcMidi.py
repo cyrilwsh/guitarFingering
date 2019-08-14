@@ -12,7 +12,8 @@ import itertools
 import globalvar as GlobalVar
 
 
-def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFret = 12, printFingerboard = False):
+def funcCreatNoteDic (capo=0 , tuningName = "standard", maxAvailableFret = 12, printFingerboard = False):
+# def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFret = 12, printFingerboard = False):
     """ 2019/07/08
         version 0.0
     """
@@ -21,6 +22,14 @@ def funcCreatNoteDic (capo=0 , tuning = [64, 59, 55, 50, 45, 40], maxAvailableFr
     in real world physical way, it looks like left-right-reversed
     capo = 1
     """
+    # set tuning
+    if tuningName == "standard":
+        tuning = [64, 59, 55, 50, 45, 40]
+    elif tuningName == "Dropped D":
+        tuning = [64, 59, 55, 50, 45, 38]
+    else:
+        print("Tuning name is not correct, or hasn't been set to funcCreatNoteDic.")
+
     print("capo = " + str(capo)) if printFingerboard == True else None
     print("tuning = " + str(tuning))  if printFingerboard == True else None
     # set 0 fret initial note -- AKA guitar tuning
@@ -78,7 +87,7 @@ def MidiCategorize(MidiFileName, trackChoice = 0):
                                 midiArray[dicCurrentNote[msg.note]][2] = currentTime
                         except:
                             None
-                            
+
                         midiArray.append([msg.note, currentTime, 'OffsetNotYetGiven', 'CatNotYetGiven', 'eventNotGiven'])
                         dicCurrentNote[msg.note] = len(midiArray)-1 # save this number of row
                     elif msg.type == "note_off":
@@ -996,11 +1005,12 @@ def genTimeInfo(uniqTime, printOut = False):
         itr = 0
         while timeResolution == 0:
             sta = diffUniqTimeSet[itr]
-            for stb in diffUniqTimeSet:
-                if stb != sta:
-                    if stb % sta == 0:
-                        timeResolution = sta
-                        break
+            if sta != 1:
+                for stb in diffUniqTimeSet:
+                    if stb != sta:
+                        if stb % sta == 0:
+                            timeResolution = sta
+                            break
             itr = itr + 1
 
     (val, counts) = np.unique(diffUniqTime, return_counts = True)
@@ -1042,21 +1052,30 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
 
 
     printStatus = npUniqTime[0]
-    verticalPrintArray.append([" E  A  D  G  B  E          Fingerings"])
+    prePrintStatus = -1 # initialize prePrintStatus
+    if bestSolution[-1] == "standard":
+        verticalPrintArray.append([" E  A  D  G  B  E          Fingerings"])
+    elif bestSolution[-1] =="Dropped D":
+        verticalPrintArray.append([" D  A  D  G  B  E          Fingerings"])
     for timeInfo in eventsTimeInfo:
         start = timeInfo[0]
         end = timeInfo[1]
 
         # print bar
-        if printStatus % oneBar == 0:
+        if (printStatus // oneBar) > (prePrintStatus // oneBar):
             verticalPrintArray.append(["------------------     ------------------"])
             horizontalPrintArrayUnit.append(tempV)
 
         # if print Vertically, choose how many bars per row
-        if printStatus % (oneBar * numPrintBar) == 0 :
+#         if printStatus % (oneBar * numPrintBar) == 0 : # bug: printStatus is not necessary integer steps
+        if ((printStatus // (oneBar * numPrintBar)) > (prePrintStatus // (oneBar * numPrintBar))): # or (printStatus < oneBar*numPrintBar): # bug: printStatus is not necessary integer steps
             horizontalPrintArray.append(horizontalPrintArrayUnit)
             horizontalPrintArrayUnit = []
-            horizontalPrintArrayUnit.append([" E ", " A ", " D ", " G ", " B ", " E ", "   ", "   ", " R ", " E ", " G ", " N ", " I ", " F "])
+            if bestSolution[-1] == "standard":
+                horizontalPrintArrayUnit.append([" E ", " A ", " D ", " G ", " B ", " E ", "   ", "   ", " R ", " E ", " G ", " N ", " I ", " F "])
+            elif bestSolution[-1] =="Dropped D":
+                horizontalPrintArrayUnit.append([" D ", " A ", " D ", " G ", " B ", " E ", "   ", "   ", " R ", " E ", " G ", " N ", " I ", " F "])
+        prePrintStatus = printStatus # update prePrintStatus
 
         # print empty time
         while printStatus < start:
@@ -1090,6 +1109,8 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
                     strsV[fingering[0]-1] = "---"
                     fingsV[fingering[0]-1] = "---"
             attacked = 1
+
+
             printStatus = printStatus + timeResolution
             strsV.reverse()
             tempHorizontalPrint = copy.deepcopy(strsV)
@@ -1107,7 +1128,9 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
         del printEventsNotes[0]
         del printEventsTimeInfo[0]
         del printBestSolution[0]
+
     horizontalPrintArray.append(horizontalPrintArrayUnit)
+    del horizontalPrintArray[0] # delete first empty row
     return verticalPrintArray, horizontalPrintArray
 
 #  print solution, horizontal or vertical
@@ -1115,7 +1138,8 @@ def printSolution(verticalPrintArray, horizontalPrintArray, printDirection = "ho
 
     if printDirection == "horizontal":
         print('\x1b[1m') # bold font
-        for block in horizontalPrintArray[1:]:
+#         for block in horizontalPrintArray[1:]:
+        for block in horizontalPrintArray:
             blockT = list(zip(*block))
 
             for i in range(len(blockT)-1,-1,-1): # reversed(blockT):
@@ -1123,7 +1147,13 @@ def printSolution(verticalPrintArray, horizontalPrintArray, printDirection = "ho
                 print("==="*len(line)) if i == len(blockT)-1 else None
 #             for line in reversed(blockT):
                 print(*line, sep="")
-            print("==="*len(line))
+
+            # it's hard to tell how long the first row is
+            # so if not getting the first line, just hard print a fixed "======="
+            try:
+                print("==="*len(line))
+            except:
+                print("===================================")
     elif printDirection == "vertical":
         print('\x1b[1m')
         for line in (verticalPrintArray):
@@ -1140,12 +1170,13 @@ def printPDF(verticalPrintArray, horizontalPrintArray, outputPdfName = "guitarFi
     pdf.set_left_margin(1)#margin: float)
     pdf.set_top_margin(1)#margin: float)
     # pdf.add_page()
-    pdf.set_font("courier", size=10)
+    pdf.set_font("courier", "B", size=10)
 #     linespace = 5
 
     rows = 0
     if printDirection == "horizontal":
-        for block in horizontalPrintArray[1:]:
+#         for block in horizontalPrintArray[1:]:
+        for block in horizontalPrintArray:
 
             pdf.add_page() if rows % rowsPerPage == 0 else None
             blockT = list(zip(*block))
