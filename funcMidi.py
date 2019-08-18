@@ -32,6 +32,7 @@ def funcCreatNoteDic (capo=0 , tuningName = "standard", maxAvailableFret = 12, p
 
     print("capo = " + str(capo)) if printFingerboard == True else None
     print("tuning = " + str(tuning))  if printFingerboard == True else None
+    print("Highest available fret = " + str(maxAvailableFret))  if printFingerboard == True else None
     # set 0 fret initial note -- AKA guitar tuning
     arrayFingerBoard = [tuning]
     arrayFingerBoard = [[string+capo for string in arrayFingerBoard[0]]]
@@ -374,12 +375,19 @@ def funcChordSol(dicCombPreproc, matchDict):
         indexFingerCount = 0
         fret = []
         indexFingerFret = []
-
+        indexFingerString =[]
+        zeroFingerCount = 0
+        zeroFingerString = []
         # 食指數目>1 and 食指的數目 < 食指fret的數目, 就代表有其他手指按了封閉的fret --> false
         for position in candidate:
             if position[2] == 1:
                 indexFingerCount = indexFingerCount + 1
                 indexFingerFret.append(position[1])
+                indexFingerString.append(position[0])
+            # check fret0
+            if position[2] == 0:
+                zeroFingerCount = zeroFingerCount + 1
+                zeroFingerString.append(position[0])
 
         uniqFret = list(set(indexFingerFret))
         if len(uniqFret) > 1:
@@ -391,12 +399,20 @@ def funcChordSol(dicCombPreproc, matchDict):
             return True
         elif len(uniqFret) ==1:
             uniqFret = uniqFret[0]
-
-        fretCount = sum([1 for x in candidate if x[1]==uniqFret])
-        if fretCount > indexFingerCount > 1:
-            return False
-        else:
-            return True
+            # 算barre的fret還有沒有其他手指
+            fretCount = sum([1 for x in candidate if x[1]==uniqFret])
+            if fretCount > indexFingerCount > 1:
+                return False
+            elif zeroFingerCount != 0 and indexFingerCount > 1:
+                # 有0fret, 其string比最高的index finger所在string還低
+                # 無法彈 要false
+                # find 0 fret
+                minZeroString = min(zeroFingerString)
+                maxIndexString = max(indexFingerString)
+                if minZeroString <= maxIndexString:
+                    return False
+            else:
+                return True
 
     solutions = [x for x in listCartisianProduct if judgeCandidateIn(x)]
     solutions = [x for x in solutions if delFaultBarreIndex(x)]
@@ -445,11 +461,14 @@ def funcCalCostAlong(pos0, pos1):
     # same finger same string, "slide"
     elif finger0 == finger1 and string0 == string1:
 
+        # 這不就是same position? 好像要廢掉
         if fret0 == fret1: # string different (if string the same, it is the first condition)
-            if finger0 ==1:
-                costStretch = GlobalVar.get_costFinger1SameFret()
-            else:
-                costStretch = GlobalVar.get_costFinger234SameFret()
+            print("I guess this line won't happend")
+
+            # if finger0 ==1:
+            #     costStretch = GlobalVar.get_costFinger1SameFret()
+            # else:
+            #     costStretch = GlobalVar.get_costFinger234SameFret()
 
         # ----- fret different -----
         # finger1 is easy to slide upward
@@ -494,23 +513,31 @@ def funcCalCostAcross(pos0, pos1):
         costAcross = GlobalVar.get_costAcrossMeet()
     elif fret0 == fret1:
         # smaller finger press lower string
-        if (finger0 - finger1) * (string0 - string1) < 0:
+        # bug: indexfinger會被設為out
+        # 加一個條件 for index finger (barre chord)
+        if finger0 == finger1 == 1:
+            costAcross = GlobalVar.get_costAcrossMeet()
+        elif (finger0 - finger1) * (string0 - string1) < 0:
             costAcross = GlobalVar.get_costAcrossMeet()
         else:
             costAcross = GlobalVar.get_costAcrossOut()
     else:
+        # analog type costAcross,
+        # when it is far from its comfortzone, the cost is larger
         deltaPhysical = abs(string0 -string1) + abs(fret0 - fret1)
+        deltaFinger = abs(finger0 - finger1)
+        awayFromComfort = abs(deltaFinger - deltaPhysical)
+        costAcross = GlobalVar.get_costAcrossMeet() * awayFromComfort
         # default:
         # costAcrossMeet = 0.25
         # cost AcrossOut = 0.5
-        costAcross = GlobalVar.get_costAcrossMeet() if abs(finger0-finger1) == deltaPhysical else GlobalVar.get_costAcrossOut()
+        # costAcross = GlobalVar.get_costAcrossMeet() if abs(finger0-finger1) == deltaPhysical else GlobalVar.get_costAcrossOut()
     return costAcross
 
 
 
 
 
-# costStretch between finger1 and finger2
 # costStretch between finger1 and finger2
 def funcCostFinger(pos0, pos1, plot=False):
     finger0 = pos0[2]
@@ -524,10 +551,10 @@ def funcCostFinger(pos0, pos1, plot=False):
 
     if (finger0 == 0 or finger1 == 0):
         # costStretch = 0.5
-        print("It should not enter this condition, funcCostFinger or funcCalCostAlong should be wrong")
+        # print("It should not enter this condition, funcCostFinger or funcCalCostAlong should be wrong")
         costStretch = GlobalVar.get_costBetwFret0andOther()
     elif (finger0 == finger1):
-        print("It should not enter this condition, funcCostFinger or funcCalCostAlong should be wrong")
+        # print("It should not enter this condition, funcCostFinger or funcCalCostAlong should be wrong")
         costStretch = GlobalVar.get_costBetwFret0andOther()
     else:
         #  ********** PWL parameter ***********
@@ -612,14 +639,16 @@ def funcCalChordCost(oneChord):
     # 1: cost between 2 fingers
     numNotes = len(oneChord)
     numFinger1 = 0
+    numFinger0 = 0
     for pos in oneChord:
         numFinger1 = numFinger1 + 1 if pos[2] == 1 else numFinger1
+        numFinger0 = numFinger0 + 1 if pos[2] == 0 else numFinger0
     # 有食指封閉就+0
     costFinger1 = 0
     if numFinger1 > 1:
         costFinger1 = costFinger1 + GlobalVar.get_costChordFinger1()
-        # 有封閉加其他指頭
-        if numNotes > numFinger1:
+        # 有封閉加其他指頭 --> 但是算到fret0了, 把它扣掉
+        if (numNotes - numFinger0) > numFinger1:
             costFinger1 = costFinger1 + GlobalVar.get_costChordFinger1withOther()
     # 2: local locality and (global) locality
     frets = [x[1] for x in oneChord]
@@ -648,6 +677,8 @@ def funcCalChordCost(oneChord):
     # 4 avoid too crowed
     costCrowd = 0
     row0Count = 0
+    costAcrossAll = 0
+    costFingerAll = 0
     while row0Count in range(numNotes):
         string0 = oneChord[row0Count][0]
         fret0 = oneChord[row0Count][1]
@@ -662,12 +693,24 @@ def funcCalChordCost(oneChord):
             if fret0 == fret1 and not ((finger0 == finger1 == 1) or (finger0 ==0 or finger1 ==0 ) ):
                 if abs(string1 - string0 ) < abs(finger1 - finger0):
                     costCrowd = costCrowd + 1
+
+            # 5. cost Across
+            costAcross = funcCalCostAcross(oneChord[row0Count], oneChord[row1Count])
+            # actually it is for costStrecth, just try to use on Chord (dynamic and static diff)
+            costFinger = funcCostFinger(oneChord[row0Count], oneChord[row1Count])
+            costAcrossAll = costAcrossAll + costAcross
+            costFingerAll = costFingerAll + costFinger
             row1Count = row1Count + 1
         row0Count = row0Count + 1
     costCrowd = costCrowd * GlobalVar.get_costChordCrowdWeight()
 
+
+    # 5, wrist twist
+    # prepare to add
+
     # Overall cost
-    costChordTotal = costFinger1 + costLocalLocality + costGlobalLocality + costFingers + costCrowd
+    costChordTotal = (costFinger1 + costLocalLocality + costGlobalLocality +
+        costFingers + costCrowd + costAcrossAll + costFingerAll)
     return costChordTotal
 
 

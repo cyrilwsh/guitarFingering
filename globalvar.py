@@ -4,8 +4,8 @@ class GlobalVar:
     costSamePosition = 0
     costAlongFinger0 = 0
 
-    costFinger1SameFret   = 5
-    costFinger234SameFret = 10
+    # costFinger1SameFret   = 5
+    # costFinger234SameFret = 10
 
     costFinger1SlideDown  = 3
     costFinger1SlideUp    = 2
@@ -24,8 +24,8 @@ class GlobalVar:
 
     # cost chord parameters
     costChordWeight = 4 # ori=0.5, emphasize Chord
-    costChordFinger1 = 1
-    costChordFinger1withOther = 1
+    costChordFinger1 = 0.5 # ori=1, but barre cost too high
+    costChordFinger1withOther = 0.5 # ori=1, follow above
     costChordLocalWeight = 1
     costChordGlobalWeight = 0.2
     costChordFinger4 = 2
@@ -44,15 +44,15 @@ def set_costAlongFinger0(value):
 def get_costAlongFinger0():
     return GlobalVar.costAlongFinger0
 
-def set_costFinger1SameFret(value):
-    GlobalVar.costFinger1SameFret = value
-def get_costFinger1SameFret():
-    return GlobalVar.costFinger1SameFret
-
-def set_costFinger234SameFret(value):
-    GlobalVar.costFinger234SameFret = value
-def get_costFinger234SameFret():
-    return GlobalVar.costFinger234SameFret
+# def set_costFinger1SameFret(value):
+#     GlobalVar.costFinger1SameFret = value
+# def get_costFinger1SameFret():
+#     return GlobalVar.costFinger1SameFret
+#
+# def set_costFinger234SameFret(value):
+#     GlobalVar.costFinger234SameFret = value
+# def get_costFinger234SameFret():
+#     return GlobalVar.costFinger234SameFret
 
 def set_costFinger1SlideDown(value):
     GlobalVar.costFinger1SlideDown = value
