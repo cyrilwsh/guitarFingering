@@ -1071,9 +1071,8 @@ def genTimeInfo(uniqTime, printOut = False):
     return timeResolution, quaver, oneBar, npUniqTime
 
 
-# can choose print finger or not
 # get print arrays, save into array, both horizontal and vertical
-def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeResolution = 32, oneBar = 1024, numPrintBar = 1, printFinger = True):
+def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeResolution = 32, oneBar = 1024, numPrintBar = 1):
     # timeResolution = 32
     # numPrintBar = 1
     # 用eventsTimeInfo 去掃
@@ -1086,23 +1085,21 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
     horizontalPrintArray = []
     v6 = [" | " for x in range(6) ]
     d6 = [" . " for x in range(6) ]
-    s5 = [" " for x in range(1) ]
+    s5 = [" " for x in range(2) ]
     tempV = copy.deepcopy(v6)
-    tempV.extend(s5) if printFinger == True else None
-    tempV.extend(copy.deepcopy(v6)) if printFinger == True else None
+    tempV.extend(s5)
+    tempV.extend(copy.deepcopy(v6))
     tempD = copy.deepcopy(d6)
-    tempD.extend(s5) if printFinger == True else None
-    tempD.extend(copy.deepcopy(d6)) if printFinger == True else None
+    tempD.extend(s5)
+    tempD.extend(copy.deepcopy(d6))
 
 
     printStatus = npUniqTime[0]
     prePrintStatus = -1 # initialize prePrintStatus
     if bestSolution[-1] == "standard":
-        verticalPrintArray.append([" E  A  D  G  B  E"]) if printFinger == False else None
-        verticalPrintArray.append([" E  A  D  G  B  E          Fingerings"]) if printFinger == True else None
+        verticalPrintArray.append([" E  A  D  G  B  E          Fingerings"])
     elif bestSolution[-1] =="Dropped D":
-        verticalPrintArray.append([" D  A  D  G  B  E"]) if printFinger == False else None
-        verticalPrintArray.append([" D  A  D  G  B  E          Fingerings"]) if printFinger == True else None
+        verticalPrintArray.append([" D  A  D  G  B  E          Fingerings"])
     for timeInfo in eventsTimeInfo:
         start = timeInfo[0]
         end = timeInfo[1]
@@ -1118,11 +1115,9 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
             horizontalPrintArray.append(horizontalPrintArrayUnit)
             horizontalPrintArrayUnit = []
             if bestSolution[-1] == "standard":
-                horizontalPrintArrayUnit.append([" E ", " A ", " D ", " G ", " B ", " E "]) if printFinger == False else None
-                horizontalPrintArrayUnit.append([" E ", " A ", " D ", " G ", " B ", " E ", "   ", " R ", " E ", " G ", " N ", " I ", " F "]) if printFinger == True else None
+                horizontalPrintArrayUnit.append([" E ", " A ", " D ", " G ", " B ", " E ", "   ", "   ", " R ", " E ", " G ", " N ", " I ", " F "])
             elif bestSolution[-1] =="Dropped D":
-                horizontalPrintArrayUnit.append([" D ", " A ", " D ", " G ", " B ", " E "]) if printFinger == False else None
-                horizontalPrintArrayUnit.append([" D ", " A ", " D ", " G ", " B ", " E ", "   ", " R ", " E ", " G ", " N ", " I ", " F "]) if printFinger == True else None
+                horizontalPrintArrayUnit.append([" D ", " A ", " D ", " G ", " B ", " E ", "   ", "   ", " R ", " E ", " G ", " N ", " I ", " F "])
         prePrintStatus = printStatus # update prePrintStatus
 
         # print empty time
@@ -1162,9 +1157,9 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
             printStatus = printStatus + timeResolution
             strsV.reverse()
             tempHorizontalPrint = copy.deepcopy(strsV)
-            tempHorizontalPrint.extend(s5) if printFinger == True else None
+            tempHorizontalPrint.extend(s5)
             fingsV.reverse()
-            tempHorizontalPrint.extend(fingsV) if printFinger == True else None
+            tempHorizontalPrint.extend(fingsV)
 
             horizontalPrintArrayUnit.append(tempHorizontalPrint)
 
@@ -1180,7 +1175,6 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
     horizontalPrintArray.append(horizontalPrintArrayUnit)
     del horizontalPrintArray[0] # delete first empty row
     return verticalPrintArray, horizontalPrintArray
-
 
 #  print solution, horizontal or vertical
 def printSolution(verticalPrintArray, horizontalPrintArray, printDirection = "horizontal"):
@@ -1243,38 +1237,3 @@ def printPDF(verticalPrintArray, horizontalPrintArray, outputPdfName = "guitarFi
         for line in (verticalPrintArray):
             pdf.cell(0, linespace, txt = "".join(line), ln=1)
     pdf.output(outputPdfName)
-
-
-
-
-# find Best Path package
-# using example:
-# bestSolution, sweepSolutions, uniqTime, eventsNotes, eventsTimeInfo = (
-#     sweepParamFindBest(midiArray, capoList = [1], tuningNameList = ["standard"], printCosts = True))
-def sweepParamFindBest(midiArray, capoList = [0], tuningNameList = ["standard"], printCosts = False):
-
-    sweepSolutions =[]
-
-    for capo in capoList:
-        for tuningName in tuningNameList:
-            dicNoteOnFingerBoard = funcCreatNoteDic(capo = capo, tuningName = tuningName, maxAvailableFret = 14, printFingerboard = False)
-            events, uniqTime = funcMidiEvents(midiArray)
-            eventsNotes, eventsTimeInfo = funcArrangeEventNotes(events)
-            possible = funcNotes2Possibles(eventsNotes, dicNoteOnFingerBoard)
-            costBest = funcBestPath(eventsNotes, possible, printCostChord = False, printCostTran = False)
-            solutions, bestSolution = funcSolutions(costBest, possible, printOut = False)
-
-            bestSolution.extend(["capo =" , capo, "tuning =", tuningName])
-            sweepSolutions.append(bestSolution)
-
-    eachCost = [x[1] for x in sweepSolutions]
-    bestIndex = eachCost.index(min(eachCost))
-    bestSolution = sweepSolutions[bestIndex]
-    if printCosts == True:
-        for sol in (sweepSolutions):
-            print(*sol[-4:-2], sep=" ")
-            print(*sol[-2:], sep=" ")
-            print(*sol[:2], sep=" ")
-            print("")
-
-    return bestSolution, sweepSolutions, uniqTime, eventsNotes, eventsTimeInfo
