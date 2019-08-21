@@ -1071,9 +1071,13 @@ def genTimeInfo(uniqTime, printOut = False):
     return timeResolution, quaver, oneBar, npUniqTime
 
 
+# finger not in 6-line format
+# remove fingers " - "
 # can choose print finger or not
 # get print arrays, save into array, both horizontal and vertical
-def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeResolution = 32, oneBar = 1024, numPrintBar = 1, printFinger = True):
+def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeResolution = 32, oneBar = 1024, numPrintBar = 1, printFinger = True, fingerMode = "6-line"):
+
+    # fingerMode = "6-line" or "simple"
     # timeResolution = 32
     # numPrintBar = 1
     # 用eventsTimeInfo 去掃
@@ -1086,13 +1090,23 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
     horizontalPrintArray = []
     v6 = [" | " for x in range(6) ]
     d6 = [" . " for x in range(6) ]
-    s5 = [" " for x in range(1) ]
+
+    s5 = ["===" for x in range(1) ] if fingerMode != "6-line" else [" " for x in range(1) ]
+#     if fingerMode == "6-line":
+#         s5 = ["===" for x in range(1) ]   # for 中間分隔線
+#     elif fingerMode == "simple":
+#         s5 = [" " for x in range(1) ]
+
+    e6 = ["   " for x in range(6) ] # add e6. empty 6
     tempV = copy.deepcopy(v6)
     tempV.extend(s5) if printFinger == True else None
+    # modify to e6
     tempV.extend(copy.deepcopy(v6)) if printFinger == True else None
+#     tempV.extend(copy.deepcopy(e6)) if printFinger == True else None
     tempD = copy.deepcopy(d6)
     tempD.extend(s5) if printFinger == True else None
-    tempD.extend(copy.deepcopy(d6)) if printFinger == True else None
+    # modify to e6
+    tempD.extend(copy.deepcopy(e6)) if printFinger == True else None
 
 
     printStatus = npUniqTime[0]
@@ -1134,8 +1148,11 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
         while printStatus < end:
             strs = [" . " for x in range(6) ]
             fings = [" . " for x in range(6) ]
+
             strsV = [" . " for x in range(6) ]
-            fingsV = [" . " for x in range(6) ]
+            # moidify from " . " to "   "
+            fingsV = [" . " for x in range(6) ] if fingerMode == "6-line" else ["   " for x in range(6) ]
+#             fingsV = ["   " for x in range(6) ]
 
             for ifingering in range(len(printBestSolution[0])):
                 fingering = printBestSolution[0][ifingering]
@@ -1144,7 +1161,9 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
                     strs[fingering[0]-1] = " | "
                     fings[fingering[0]-1] = " | "
                     strsV[fingering[0]-1] = "---"
-                    fingsV[fingering[0]-1] = "---"
+
+                    fingsV[fingering[0]-1] = "---" if fingerMode == "6-line" else "   "
+#                     fingsV[fingering[0]-1] = "   "
 
                 elif attacked == 0:
                     strs[fingering[0]-1] =  " " + str(fingering[1]) + " " if len(str(fingering[1])) == 1 else " " + str(fingering[1])
@@ -1155,9 +1174,18 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
                     strs[fingering[0]-1] = " | "
                     fings[fingering[0]-1] = " | "
                     strsV[fingering[0]-1] = "---"
-                    fingsV[fingering[0]-1] = "---"
+
+                    fingsV[fingering[0]-1] = "---" if fingerMode == "6-line" else "   "
+#                     fingsV[fingering[0]-1] = "   "
             attacked = 1
 
+            # fingsV做後處理
+            if fingerMode != "6-line":
+                while "   " in fingsV:
+                    fingsV.remove("   ")
+                dmyFingsV = ["   " for x in range(6) ]
+                dmyFingsV[6-len(fingsV):] = fingsV
+                fingsV = dmyFingsV
 
             printStatus = printStatus + timeResolution
             strsV.reverse()
@@ -1180,6 +1208,8 @@ def genPrintArray(eventsNotes, eventsTimeInfo, npUniqTime, bestSolution, timeRes
     horizontalPrintArray.append(horizontalPrintArrayUnit)
     del horizontalPrintArray[0] # delete first empty row
     return verticalPrintArray, horizontalPrintArray
+
+
 
 
 #  print solution, horizontal or vertical
@@ -1248,16 +1278,13 @@ def printPDF(verticalPrintArray, horizontalPrintArray, outputPdfName = "guitarFi
 
 
 # find Best Path package
-# using example:
-# bestSolution, sweepSolutions, uniqTime, eventsNotes, eventsTimeInfo = (
-#     sweepParamFindBest(midiArray, capoList = [1], tuningNameList = ["standard"], printCosts = True))
-def sweepParamFindBest(midiArray, capoList = [0], tuningNameList = ["standard"], printCosts = False):
+def sweepParamFindBest(midiArray, capoList = [0], tuningNameList = ["standard"], maxAvailableFret = 12, printCosts = False, printFingerboard = True):
 
     sweepSolutions =[]
 
     for capo in capoList:
         for tuningName in tuningNameList:
-            dicNoteOnFingerBoard = funcCreatNoteDic(capo = capo, tuningName = tuningName, maxAvailableFret = 14, printFingerboard = False)
+            dicNoteOnFingerBoard = funcCreatNoteDic(capo = capo, tuningName = tuningName, maxAvailableFret = maxAvailableFret, printFingerboard = printFingerboard)
             events, uniqTime = funcMidiEvents(midiArray)
             eventsNotes, eventsTimeInfo = funcArrangeEventNotes(events)
             possible = funcNotes2Possibles(eventsNotes, dicNoteOnFingerBoard)
